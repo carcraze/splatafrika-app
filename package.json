@@ -1,27 +1,47 @@
 {
-  "name": "app",
+  "name": "splatafrika",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:properties": "vitest --run tests/properties/",
+    "test:coverage": "vitest --run --coverage",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.14.0",
+    "next": "15.3.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.3.9"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9",
     "eslint-config-next": "15.3.9",
-    "@eslint/eslintrc": "^3"
+    "fast-check": "^4.8.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.6"
   }
 }

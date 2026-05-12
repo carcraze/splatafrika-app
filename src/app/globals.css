@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
+/* SplatAfrika Design Tokens */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary — Deep professional navy */
+  --color-primary-900: #0A1628;
+  --color-primary-800: #0F2040;
+  --color-primary-700: #1A3C5E;
+  --color-primary-500: #2563EB;
+
+  /* Accent — Vibrant electric teal */
+  --color-accent-500: #00D4AA;
+  --color-accent-400: #33DDBB;
+  --color-accent-300: #66E8CC;
+  --color-accent-900: #003D30;
+
+  /* Grayscale */
+  --color-gray-50: #F8FAFB;
+  --color-gray-100: #F1F4F6;
+  --color-gray-200: #E2E8ED;
+  --color-gray-400: #8FA3B1;
+  --color-gray-600: #4A6070;
+  --color-gray-800: #1C2B36;
+  --color-gray-900: #0D1B23;
+
+  /* Semantic */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+
+  /* Surfaces */
+  --surface-glass: rgba(255, 255, 255, 0.06);
+  --surface-dark: rgba(10, 22, 40, 0.85);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary-900: var(--color-primary-900);
+  --color-primary-800: var(--color-primary-800);
+  --color-primary-700: var(--color-primary-700);
+  --color-primary-500: var(--color-primary-500);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-900: var(--color-accent-900);
+  --color-gray-50: var(--color-gray-50);
+  --color-gray-100: var(--color-gray-100);
+  --color-gray-200: var(--color-gray-200);
+  --color-gray-400: var(--color-gray-400);
+  --color-gray-600: var(--color-gray-600);
+  --color-gray-800: var(--color-gray-800);
+  --color-gray-900: var(--color-gray-900);
+  --font-sans: var(--font-sora), var(--font-inter), system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Loading skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #F1F4F6 25%, #E2E8ED 50%, #F1F4F6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Progress bar glow */
+@keyframes progress-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 212, 170, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(0, 212, 170, 0.8); }
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #00D4AA, #33DDBB);
+  animation: progress-glow 2s ease-in-out infinite;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-gray-50);
+  color: var(--color-gray-800);
 }
