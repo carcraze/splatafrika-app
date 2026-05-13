@@ -1,8 +1,10 @@
 {
-  "name": "splatafrika-job-orchestrator",
+  "name": "splatafrika-lambdas",
   "version": "1.0.0",
   "type": "module",
+  "description": "SplatAfrika Lambda functions (job-orchestrator, data-lifecycle)",
   "dependencies": {
-    "@aws-sdk/client-ec2": "^3.600.0"
+    "@aws-sdk/client-ec2": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0"
   }
 }
