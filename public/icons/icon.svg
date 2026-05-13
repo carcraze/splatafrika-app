@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background: Navy circle -->
+  <rect width="512" height="512" rx="108" fill="#0A1628"/>
+  
+  <!-- 3D Gaussian splat representation: overlapping teal circles with varying opacity -->
+  <circle cx="256" cy="240" r="120" fill="#00D4AA" opacity="0.15"/>
+  <circle cx="220" cy="260" r="80" fill="#00D4AA" opacity="0.25"/>
+  <circle cx="290" cy="230" r="90" fill="#00D4AA" opacity="0.2"/>
+  <circle cx="256" cy="250" r="60" fill="#00D4AA" opacity="0.4"/>
+  <circle cx="240" cy="240" r="35" fill="#00D4AA" opacity="0.7"/>
+  <circle cx="270" cy="250" r="25" fill="#00D4AA" opacity="0.9"/>
+  
+  <!-- "S" lettermark -->
+  <text x="256" y="290" font-family="system-ui, sans-serif" font-size="180" font-weight="700" fill="white" text-anchor="middle" dominant-baseline="central">S</text>
+  
+  <!-- Accent dot -->
+  <circle cx="340" cy="170" r="12" fill="#00D4AA"/>
+</svg>
