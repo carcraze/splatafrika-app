@@ -1,0 +1,8 @@
+{
+  "name": "splatafrika-job-orchestrator",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.600.0"
+  }
+}
