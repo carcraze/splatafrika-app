@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getDodoClient } from "@/lib/dodo";
 import { PRICING } from "@/lib/constants";
 import type { TourTier } from "@/types";
 
 /**
  * POST /api/payments/dodo
  * Creates a Dodo Payments checkout session for international card payments.
+ * Based on Dodo Payments official documentation (Context7).
+ *
+ * Dodo uses product-based checkout. We create a dynamic session with product_cart.
  */
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -41,52 +45,56 @@ export async function POST(request: Request) {
       ? PRICING[tier].monthly
       : PRICING[tier].oneOff;
 
-  // Create Dodo Payments session
-  const dodoResponse = await fetch("https://api.dodopayments.com/payments", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.DODO_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      amount: amount * 100, // Dodo expects smallest unit
-      currency: "KES",
-      description: `SplatAfrika ${PRICING[tier].label} — ${tour.name}`,
+  try {
+    const dodoClient = getDodoClient();
+    // Create Dodo Payments session using the SDK
+    // Dodo uses product_cart for dynamic checkout
+    const session = await dodoClient.payments.create({
+      payment_link: true,
+      billing: {
+        city: "Nairobi",
+        country: "KE",
+      },
+      customer: {
+        email: user.email!,
+        name: user.user_metadata?.full_name || user.email!,
+      },
+      product_cart: [
+        {
+          product_id: process.env[`DODO_PRODUCT_${tier.toUpperCase()}_${paymentType.toUpperCase()}`] || "default",
+          quantity: 1,
+        },
+      ],
       metadata: {
         tour_id: tourId,
         user_id: user.id,
         tier,
         payment_type: paymentType,
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/tour/${tourId}?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/checkout?tour=${tourId}&cancelled=true`,
-    }),
-  });
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/tour/${tourId}?payment=success`,
+    });
 
-  if (!dodoResponse.ok) {
-    const err = await dodoResponse.text();
+    // Create pending payment record
+    await supabase.from("payments").insert({
+      user_id: user.id,
+      tour_id: tourId,
+      provider: "dodo",
+      provider_reference: session.payment_id || "pending",
+      payment_type: paymentType,
+      amount: amount * 100, // Store in smallest unit
+      currency: "KES",
+      status: "pending",
+    });
+
+    return NextResponse.json({
+      checkoutUrl: session.payment_link,
+      paymentId: session.payment_id,
+    });
+  } catch (err) {
+    console.error("Dodo payment creation failed:", err);
     return NextResponse.json(
-      { error: "Payment session creation failed", details: err },
+      { error: "Payment session creation failed" },
       { status: 500 }
     );
   }
-
-  const session = await dodoResponse.json();
-
-  // Create pending payment record
-  await supabase.from("payments").insert({
-    user_id: user.id,
-    tour_id: tourId,
-    provider: "dodo",
-    provider_reference: session.id || session.payment_id,
-    payment_type: paymentType,
-    amount: amount * 100,
-    currency: "KES",
-    status: "pending",
-  });
-
-  return NextResponse.json({
-    checkoutUrl: session.checkout_url || session.url,
-    paymentId: session.id || session.payment_id,
-  });
 }
