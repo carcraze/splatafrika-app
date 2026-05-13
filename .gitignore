@@ -54,3 +54,5 @@ workbox-*.js
 # Misc
 .npmrc
 *.log
+
+.vercel

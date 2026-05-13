@@ -3,6 +3,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { TourViewerPage } from "./TourViewerPage";
 import type { Tour } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 interface TourPageProps {
   params: Promise<{ tourId: string }>;
 }
