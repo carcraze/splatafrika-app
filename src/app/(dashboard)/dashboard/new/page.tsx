@@ -52,7 +52,9 @@ export default function NewTourPage() {
         address: address.trim(),
         property_type: propertyType,
         tier,
-        status: "awaiting_payment",
+        // TODO: Re-enable payment flow when Dodo/Paystack keys are configured
+        // status: "awaiting_payment",
+        status: "paid", // BYPASS: Skip payment for testing
       })
       .select()
       .single();
@@ -63,8 +65,9 @@ export default function NewTourPage() {
       return;
     }
 
-    // Redirect to checkout with tour ID
-    router.push(`/checkout?tour=${tour.id}`);
+    // TODO: Re-enable payment redirect when ready
+    // router.push(`/checkout?tour=${tour.id}`);
+    router.push(`/capture?tour=${tour.id}`); // BYPASS: Go straight to capture
   };
 
   return (
@@ -169,7 +172,7 @@ export default function NewTourPage() {
         >
           {loading
             ? "Creating..."
-            : `Continue to Payment — ${formatCurrency(PRICING[tier].oneOff)}`}
+            : `Create Tour — ${formatCurrency(PRICING[tier].oneOff)}`}
         </button>
       </form>
     </motion.div>

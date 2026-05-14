@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { CaptureRecorder } from "@/components/capture/CaptureRecorder";
 import { FrameExtractor } from "@/components/capture/FrameExtractor";
 import { FramePreview } from "@/components/capture/FramePreview";
@@ -9,11 +10,22 @@ import { S3Uploader } from "@/components/capture/S3Uploader";
 type CaptureStep = "record" | "extract" | "preview" | "upload" | "done";
 
 export default function CapturePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0A1628] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[#00D4AA]/30 border-t-[#00D4AA] animate-spin" /></div>}>
+      <CaptureContent />
+    </Suspense>
+  );
+}
+
+function CaptureContent() {
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<CaptureStep>("record");
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
   const [frames, setFrames] = useState<Blob[]>([]);
-  const [tourId] = useState<string | null>(null);
-  const [tier] = useState<"standard" | "premium">("standard");
+
+  // Read tour info from URL params
+  const tourId = searchParams.get("tour") || "";
+  const tier = (searchParams.get("tier") as "standard" | "premium") || "standard";
 
   // Get tour info from URL params
   // In production, this would come from the checkout flow
@@ -70,7 +82,7 @@ export default function CapturePage() {
       {step === "upload" && (
         <S3Uploader
           frames={frames}
-          tourId={tourId || ""}
+          tourId={tourId}
           tier={tier}
           onComplete={handleUploadComplete}
         />
