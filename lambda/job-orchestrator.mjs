@@ -55,7 +55,11 @@ export async function handler(event) {
   }
 
   // UserData script for the EC2 instance
+  // Uses Deep Learning Base AMI (CUDA pre-installed) — installs COLMAP + worker at boot
   const userData = Buffer.from(`#!/bin/bash
+set -ex
+exec > /var/log/splatafrika-job.log 2>&1
+
 export JOB_ID="${jobId}"
 export QUALITY_TIER="${qualityTier}"
 export S3_INPUT_PATH="${s3InputPath}"
@@ -63,13 +67,105 @@ export TOUR_ID="${tourId}"
 export SUPABASE_URL="${SUPABASE_URL}"
 export SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY}"
 export JOB_WEBHOOK_URL="${JOB_WEBHOOK_URL}"
-export AWS_REGION="${process.env.AWS_REGION || "us-east-1"}"
+export AWS_DEFAULT_REGION="${process.env.AWS_REGION || "us-east-1"}"
 export S3_INPUT_BUCKET="${process.env.S3_INPUT_BUCKET}"
 export S3_OUTPUT_BUCKET="${process.env.S3_OUTPUT_BUCKET}"
 
-# Run the processing pipeline
-cd /opt/worker
-python3 process.py
+# Wait for cloud-init
+cloud-init status --wait || true
+
+# Install COLMAP + dependencies (if not already installed)
+if ! command -v colmap &> /dev/null; then
+  apt-get update -y
+  apt-get install -y colmap python3-pip git ffmpeg
+  pip3 install boto3 requests open3d
+fi
+
+# Install 3DGS if not present
+if [ ! -d "/opt/3dgs" ]; then
+  git clone --depth 1 https://github.com/graphdeco-inria/gaussian-splatting.git /opt/3dgs
+  cd /opt/3dgs && pip3 install -e . 2>/dev/null || pip3 install submodules/diff-gaussian-rasterization submodules/simple-knn 2>/dev/null || true
+fi
+
+# Download and run worker script
+mkdir -p /opt/worker
+cat > /opt/worker/process.py << 'PYEOF'
+import os,sys,time,signal,subprocess,shutil
+from pathlib import Path
+import boto3,requests
+
+JOB_ID=os.environ.get("JOB_ID","test")
+QUALITY_TIER=os.environ.get("QUALITY_TIER","standard")
+S3_INPUT_PATH=os.environ.get("S3_INPUT_PATH","")
+S3_INPUT_BUCKET=os.environ.get("S3_INPUT_BUCKET","splatafrika-input")
+S3_OUTPUT_BUCKET=os.environ.get("S3_OUTPUT_BUCKET","splatafrika-output")
+JOB_WEBHOOK_URL=os.environ.get("JOB_WEBHOOK_URL","")
+SUPABASE_SERVICE_KEY=os.environ.get("SUPABASE_SERVICE_KEY","")
+REGION=os.environ.get("AWS_DEFAULT_REGION","us-east-1")
+
+WORK=Path("/tmp/splatafrika");FRAMES=WORK/"frames";COLMAP_OUT=WORK/"colmap";OUTPUT=WORK/"output"
+s3=boto3.client("s3",region_name=REGION);ec2=boto3.client("ec2",region_name=REGION)
+start=time.time()
+
+def status(s,**kw):
+    if not JOB_WEBHOOK_URL:return
+    try:requests.post(JOB_WEBHOOK_URL,json={"job_id":JOB_ID,"status":s,**kw},headers={"Content-Type":"application/json","Authorization":f"Bearer {SUPABASE_SERVICE_KEY}"},timeout=10)
+    except:pass
+
+def terminate():
+    try:
+        iid=requests.get("http://169.254.169.254/latest/meta-data/instance-id",timeout=2).text
+        ec2.terminate_instances(InstanceIds=[iid])
+    except:pass
+
+def download():
+    FRAMES.mkdir(parents=True,exist_ok=True)
+    n=0
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=S3_INPUT_BUCKET,Prefix=S3_INPUT_PATH):
+        for obj in page.get("Contents",[]):
+            k=obj["Key"]
+            if k.endswith((".png",".jpg",".jpeg")):
+                s3.download_file(S3_INPUT_BUCKET,k,str(FRAMES/k.split("/")[-1]));n+=1
+    print(f"Downloaded {n} frames")
+    if n==0:raise RuntimeError("No frames in S3")
+
+def colmap():
+    COLMAP_OUT.mkdir(parents=True,exist_ok=True)
+    db=str(COLMAP_OUT/"database.db");sparse=str(COLMAP_OUT/"sparse")
+    os.makedirs(sparse,exist_ok=True)
+    subprocess.run(["colmap","feature_extractor","--database_path",db,"--image_path",str(FRAMES),"--ImageReader.single_camera","1"],check=True)
+    subprocess.run(["colmap","exhaustive_matcher","--database_path",db],check=True)
+    subprocess.run(["colmap","mapper","--database_path",db,"--image_path",str(FRAMES),"--output_path",sparse],check=True)
+    if not os.listdir(sparse):raise RuntimeError("COLMAP failed")
+
+def train(iters=15000):
+    OUTPUT.mkdir(parents=True,exist_ok=True)
+    subprocess.run(["python3","/opt/3dgs/train.py","-s",str(COLMAP_OUT),"--iterations",str(iters),"-m",str(OUTPUT/"model")],check=True)
+
+def upload():
+    plys=list(OUTPUT.rglob("*.ply"))
+    if not plys:raise RuntimeError("No .ply output")
+    key=f"output/{JOB_ID}/{JOB_ID}.ply"
+    s3.upload_file(str(plys[0]),S3_OUTPUT_BUCKET,key)
+    return key
+
+print(f"[START] {JOB_ID} tier={QUALITY_TIER}")
+status("processing")
+try:
+    download()
+    colmap()
+    train(30000 if QUALITY_TIER=="premium" else 15000)
+    url=upload()
+    status("complete",splat_url=url)
+    print(f"[DONE] {int(time.time()-start)}s")
+except Exception as e:
+    print(f"[FAIL] {e}")
+    status("failed",error_message=str(e))
+finally:
+    terminate()
+PYEOF
+
+cd /opt/worker && python3 process.py
 `).toString("base64");
 
   // Attempt Spot launch with retries and on-demand fallback
