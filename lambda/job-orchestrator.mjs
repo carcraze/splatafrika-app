@@ -36,14 +36,27 @@ export async function handler(event) {
   console.log("Job orchestrator triggered:", JSON.stringify(event));
 
   // Parse job details from webhook payload
-  const record = event.record || event.body?.record || event;
+  // Function URL events have body as a JSON string
+  let record;
+  if (event.body) {
+    try {
+      const body = typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+      record = body.record || body;
+    } catch (e) {
+      console.error("Failed to parse body:", e);
+      record = event.record || event;
+    }
+  } else {
+    record = event.record || event;
+  }
+
   const jobId = record.id;
   const qualityTier = record.quality_tier;
   const s3InputPath = record.s3_input_path;
   const tourId = record.tour_id;
 
   if (!jobId || !s3InputPath) {
-    console.error("Missing job_id or s3_input_path");
+    console.error("Missing job_id or s3_input_path. Got:", JSON.stringify(record));
     return { statusCode: 400, body: "Missing required fields" };
   }
 

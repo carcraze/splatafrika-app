@@ -67,7 +67,7 @@ export default function NewTourPage() {
 
     // TODO: Re-enable payment redirect when ready
     // router.push(`/checkout?tour=${tour.id}`);
-    router.push(`/capture?tour=${tour.id}`); // BYPASS: Go straight to capture
+    router.push(`/capture?tour=${tour.id}&tier=${tier}`); // BYPASS: Go straight to capture
   };
 
   return (

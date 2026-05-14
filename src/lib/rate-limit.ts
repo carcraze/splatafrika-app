@@ -45,7 +45,7 @@ export function rateLimit(
 
 // Pre-configured limiters
 export const RATE_LIMITS = {
-  upload: { maxRequests: 5, windowMs: 60_000 },      // 5/min
-  payment: { maxRequests: 3, windowMs: 60_000 },     // 3/min
-  api: { maxRequests: 100, windowMs: 60_000 },       // 100/min
+  upload: { maxRequests: 30, windowMs: 60_000 },     // 30/min — generous for retries
+  payment: { maxRequests: 10, windowMs: 60_000 },    // 10/min
+  api: { maxRequests: 200, windowMs: 60_000 },       // 200/min
 } as const;
