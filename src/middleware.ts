@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/api/")) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
 
-    let config = RATE_LIMITS.api;
+    let config: { maxRequests: number; windowMs: number } = RATE_LIMITS.api;
     let key = `api:${ip}`;
 
     if (pathname.includes("/upload/presign")) {
