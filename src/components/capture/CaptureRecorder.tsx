@@ -13,6 +13,7 @@ export function CaptureRecorder({ tier, onComplete }: CaptureRecorderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const elapsedRef = useRef(0);
 
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -64,11 +65,13 @@ export function CaptureRecorder({ tier, onComplete }: CaptureRecorderProps) {
     if (!isRecording) return;
     const interval = setInterval(() => {
       setElapsed((prev) => {
-        if (prev >= CAPTURE.MAX_RECORDING_SECONDS) {
+        const next = prev + 1;
+        elapsedRef.current = next;
+        if (next >= CAPTURE.MAX_RECORDING_SECONDS) {
           stopRecording();
           return prev;
         }
-        return prev + 1;
+        return next;
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -78,6 +81,7 @@ export function CaptureRecorder({ tier, onComplete }: CaptureRecorderProps) {
   const startRecording = useCallback(() => {
     if (!stream) return;
     chunksRef.current = [];
+    elapsedRef.current = 0;
     const recorder = new MediaRecorder(stream, {
       mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9"
@@ -88,11 +92,10 @@ export function CaptureRecorder({ tier, onComplete }: CaptureRecorderProps) {
     };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      if (elapsed < CAPTURE.MIN_RECORDING_SECONDS) {
-        setError(
-          `Minimum 30 seconds recommended for quality 3D reconstruction. You recorded ${elapsed}s.`
-        );
-        return;
+      const recordedSeconds = elapsedRef.current;
+      // Show warning for short recordings but don't block — let them proceed
+      if (recordedSeconds < CAPTURE.MIN_RECORDING_SECONDS) {
+        console.warn(`Short recording: ${recordedSeconds}s (recommended: 30s+)`);
       }
       onComplete(blob);
     };
@@ -101,7 +104,7 @@ export function CaptureRecorder({ tier, onComplete }: CaptureRecorderProps) {
     setIsRecording(true);
     setElapsed(0);
     setError(null);
-  }, [stream, elapsed, onComplete]);
+  }, [stream, onComplete]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
