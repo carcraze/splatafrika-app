@@ -48,11 +48,11 @@ export async function POST(request: Request) {
   const urls = [];
 
   for (let i = 0; i < frameCount; i++) {
-    const key = `${s3Key}/frame_${String(i).padStart(5, "0")}.png`;
+    const key = `${s3Key}/frame_${String(i).padStart(5, "0")}.jpg`;
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_INPUT_BUCKET!,
       Key: key,
-      ContentType: contentType || "image/png",
+      ContentType: contentType || "image/jpeg",
     });
 
     const url = await getSignedUrl(s3, command, { expiresIn: 900 }); // 15 min

@@ -12,10 +12,12 @@ interface S3UploaderProps {
   onComplete: () => void;
 }
 
+const PARALLEL_UPLOADS = 3; // Upload 3 frames simultaneously
+
 export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [retrying, setRetrying] = useState(false);
+  const [status, setStatus] = useState("Preparing upload...");
   const abortRef = useRef(false);
 
   useEffect(() => {
@@ -26,6 +28,8 @@ export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps
 
   async function uploadFrames() {
     try {
+      setStatus("Getting upload URLs...");
+
       // 1. Get pre-signed URLs from our API
       const response = await fetch("/api/upload/presign", {
         method: "POST",
@@ -33,61 +37,40 @@ export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps
         body: JSON.stringify({
           tourId,
           frameCount: frames.length,
-          contentType: "image/png",
+          contentType: "image/jpeg",
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get upload URLs");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to get upload URLs (${response.status})`);
       }
 
       const { urls, s3Key } = await response.json();
 
-      // 2. Upload each frame with retry logic
+      // 2. Upload frames in parallel batches with retry
+      setStatus("Uploading frames...");
       let uploaded = 0;
-      for (let i = 0; i < frames.length; i++) {
+
+      for (let batch = 0; batch < frames.length; batch += PARALLEL_UPLOADS) {
         if (abortRef.current) return;
 
-        let success = false;
-        let attempts = 0;
-        let backoff = UPLOAD.INITIAL_BACKOFF_MS;
+        const batchEnd = Math.min(batch + PARALLEL_UPLOADS, frames.length);
+        const batchPromises = [];
 
-        while (!success && attempts < UPLOAD.MAX_RETRIES_PER_CHUNK) {
-          try {
-            const uploadResponse = await fetch(urls[i].url, {
-              method: "PUT",
-              body: frames[i],
-              headers: { "Content-Type": "image/png" },
-            });
-
-            if (!uploadResponse.ok) {
-              throw new Error(`Upload failed: ${uploadResponse.status}`);
-            }
-
-            success = true;
-            uploaded++;
-            setProgress((uploaded / frames.length) * 100);
-          } catch {
-            attempts++;
-            if (attempts >= UPLOAD.MAX_RETRIES_PER_CHUNK) {
-              throw new Error(
-                `Failed to upload frame ${i + 1} after ${UPLOAD.MAX_RETRIES_PER_CHUNK} attempts`
-              );
-            }
-            // Exponential backoff
-            setRetrying(true);
-            await new Promise((r) => setTimeout(r, backoff));
-            backoff *= 2;
-            setRetrying(false);
-          }
+        for (let i = batch; i < batchEnd; i++) {
+          batchPromises.push(uploadSingleFrame(frames[i], urls[i].url));
         }
+
+        await Promise.all(batchPromises);
+        uploaded += (batchEnd - batch);
+        setProgress((uploaded / frames.length) * 100);
       }
 
       // 3. Create job record in Supabase
+      setStatus("Starting processing...");
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) throw new Error("Not authenticated");
 
@@ -108,9 +91,7 @@ export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps
         } else {
           jobAttempts++;
           if (jobAttempts >= 3) {
-            setError(
-              "Upload succeeded but job creation failed. Your frames are safe — please contact support."
-            );
+            setError("Upload succeeded but job creation failed. Your frames are safe — please contact support.");
             return;
           }
           await new Promise((r) => setTimeout(r, 1000));
@@ -118,22 +99,45 @@ export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps
       }
 
       // 4. Update tour status
-      await supabase
-        .from("tours")
-        .update({ status: "processing" })
-        .eq("id", tourId);
+      await supabase.from("tours").update({ status: "processing" }).eq("id", tourId);
 
       onComplete();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Upload failed. Please try again."
-      );
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    }
+  }
+
+  async function uploadSingleFrame(frame: Blob, url: string): Promise<void> {
+    let attempts = 0;
+    let backoff = UPLOAD.INITIAL_BACKOFF_MS;
+
+    while (attempts < UPLOAD.MAX_RETRIES_PER_CHUNK) {
+      try {
+        const uploadResponse = await fetch(url, {
+          method: "PUT",
+          body: frame,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`HTTP ${uploadResponse.status}`);
+        }
+        return; // Success
+      } catch {
+        attempts++;
+        if (attempts >= UPLOAD.MAX_RETRIES_PER_CHUNK) {
+          throw new Error(`Frame upload failed after ${UPLOAD.MAX_RETRIES_PER_CHUNK} attempts`);
+        }
+        await new Promise((r) => setTimeout(r, backoff));
+        backoff *= 2;
+      }
     }
   }
 
   const handleRetry = () => {
     setError(null);
     setProgress(0);
+    setStatus("Retrying...");
     uploadFrames();
   };
 
@@ -163,11 +167,9 @@ export function S3Uploader({ frames, tourId, tier, onComplete }: S3UploaderProps
       <div className="text-center space-y-6 w-full max-w-xs">
         <div className="w-16 h-16 mx-auto rounded-full border-2 border-[#00D4AA]/30 border-t-[#00D4AA] animate-spin" />
         <div className="space-y-2">
-          <p className="text-sm text-white font-medium">
-            {retrying ? "Retrying..." : "Uploading frames..."}
-          </p>
+          <p className="text-sm text-white font-medium">{status}</p>
           <p className="text-xs text-[#8FA3B1]">
-            {Math.round(progress)}% complete
+            {Math.round(progress)}% complete ({frames.length} frames)
           </p>
         </div>
         <div className="w-full h-2 bg-[#1A3C5E] rounded-full overflow-hidden">

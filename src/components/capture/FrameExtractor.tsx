@@ -35,37 +35,44 @@ export function FrameExtractor({ videoBlob, onComplete }: FrameExtractorProps) {
 
       const duration = video.duration;
 
-      // Truncation: only extract first 300 seconds if duration > 300
+      // Smart extraction: 1 frame every 2 seconds
+      // 1-min video = ~30 frames, 3-min = ~90 frames (not 180!)
+      // This is plenty for COLMAP and keeps uploads fast
+      const EXTRACTION_INTERVAL = 2;
       const maxSeconds = duration > CAPTURE.MAX_EXTRACTION_SECONDS
         ? CAPTURE.MAX_EXTRACTION_SECONDS
         : Math.floor(duration);
 
-      const expectedFrames = maxSeconds * CAPTURE.FRAMES_PER_SECOND;
+      const expectedFrames = Math.floor(maxSeconds / EXTRACTION_INTERVAL);
       setTotalFrames(expectedFrames);
 
       const canvas = canvasRef.current;
       if (!canvas) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Cap resolution at 1920x1080 to keep file sizes reasonable
+      const scale = Math.min(1, 1920 / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       const frames: Blob[] = [];
 
       for (let i = 0; i < expectedFrames; i++) {
-        const time = i / CAPTURE.FRAMES_PER_SECOND;
+        const time = i * EXTRACTION_INTERVAL;
         video.currentTime = time;
 
         await new Promise<void>((resolve) => {
           video.onseeked = () => resolve();
         });
 
-        ctx.drawImage(video, 0, 0);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        // JPEG at 85% quality — 5-10x smaller than PNG, much faster upload
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(
             (b) => (b ? resolve(b) : reject(new Error("Frame extraction failed"))),
-            "image/png"
+            "image/jpeg",
+            0.85
           );
         });
 
@@ -77,7 +84,6 @@ export function FrameExtractor({ videoBlob, onComplete }: FrameExtractorProps) {
       URL.revokeObjectURL(videoUrl);
 
       if (duration > CAPTURE.MAX_EXTRACTION_SECONDS) {
-        // Notify user of truncation — but still proceed
         console.info(`Video truncated: ${Math.round(duration)}s → ${CAPTURE.MAX_EXTRACTION_SECONDS}s`);
       }
 
@@ -123,7 +129,6 @@ export function FrameExtractor({ videoBlob, onComplete }: FrameExtractorProps) {
           />
         </div>
       </div>
-      {/* Hidden canvas for frame extraction */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
